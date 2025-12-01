@@ -1,12 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Sparkles, Copy, Download, ArrowLeft, Check, Eye, Code2 } from "lucide-react"
+import { Sparkles, Copy, Download, ArrowLeft, Check, Eye, Code2, Keyboard, X } from "lucide-react"
 import Link from "next/link"
 import { downloadAsProperZip } from "@/lib/download-helper"
 import type { GeneratedProject } from "@/lib/code-generator"
+
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
+}
 
 const translations = {
   en: {
@@ -55,12 +62,60 @@ export default function GeneratePage() {
   const [copied, setCopied] = useState(false)
   const [viewMode, setViewMode] = useState<"code" | "preview">("code")
   const [selectedFile, setSelectedFile] = useState<string>("src/App.tsx")
+  const [previewUrl, setPreviewUrl] = useState<string>("")
+  const [showTips, setShowTips] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const t = translations[language]
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Enter to generate
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !isGenerating) {
+        e.preventDefault()
+        handleGenerate()
+      }
+      // Ctrl/Cmd + Shift + P to toggle preview
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
+        e.preventDefault()
+        if (generatedProject) {
+          setViewMode(viewMode === "code" ? "preview" : "code")
+        }
+      }
+      // Ctrl/Cmd + C to copy when code view is active
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && viewMode === "code" && generatedProject) {
+        e.preventDefault()
+        handleCopy()
+      }
+      // Escape to close preview
+      if (e.key === 'Escape' && previewUrl) {
+        setPreviewUrl("")
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isGenerating, viewMode, generatedProject, previewUrl])
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
     setIsGenerating(true)
+
+    // Add user message to conversation history
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: prompt.trim(),
+      timestamp: new Date()
+    }
+    setMessages(prev => [...prev, userMessage])
 
     try {
       const response = await fetch('/api/generate', {
@@ -79,6 +134,18 @@ export default function GeneratePage() {
       setGeneratedProject(data.project)
       setSelectedFile('src/App.tsx')
       setViewMode('code')
+
+      // Add AI response to conversation history
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `Generated ${Object.keys(data.project.files).length} files for your request: "${prompt.trim()}"`,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, aiMessage])
+
+      // Clear the input after successful generation
+      setPrompt("")
     } catch (error) {
       console.error('Error generating code:', error)
       alert('Failed to generate code. Please try again.')
@@ -103,9 +170,9 @@ export default function GeneratePage() {
 
   const handlePreview = async () => {
     if (!prompt.trim()) return
-    
+
     try {
-      const response = await fetch('/api/preview-debug', {
+      const response = await fetch('/api/preview-simple', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -116,48 +183,65 @@ export default function GeneratePage() {
       if (response.ok) {
         const previewHtml = await response.text()
         console.log('Preview HTML length:', previewHtml.length)
-        console.log('Preview HTML preview:', previewHtml.substring(0, 200))
-        
-        const previewWindow = window.open('', '_blank', 'width=1000,height=700,scrollbars=yes')
-        if (previewWindow) {
-          previewWindow.document.write(previewHtml)
-          previewWindow.document.close()
-          previewWindow.focus()
-          console.log('Preview window opened successfully')
-        } else {
-          alert('Please allow popups for this site to see the preview.')
-        }
+
+        // Create a blob URL for the preview
+        const blob = new Blob([previewHtml], { type: 'text/html' })
+        const url = URL.createObjectURL(blob)
+        setPreviewUrl(url)
+        setViewMode('preview')
+
+        console.log('Preview created successfully')
       } else {
         const errorText = await response.text()
         console.error('Preview API error:', response.status, errorText)
         throw new Error(`Preview generation failed: ${response.status}`)
       }
     } catch (error) {
-      console.error('Error opening preview:', error)
-      alert('Failed to open preview. Please try again or download the ZIP file to run locally.')
+      console.error('Error creating preview:', error)
+      alert('Failed to create preview. Please try again or download the ZIP file to run locally.')
     }
   }
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border/40">
-        <div className="container flex h-16 items-center justify-between">
+        <div className="w-full px-4 flex h-16 items-center justify-between">
           <Link href="/">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="mr-2 h-4 w-4" />
               {t.back}
             </Button>
           </Link>
-          <Button variant="outline" size="sm" onClick={() => setLanguage(language === "en" ? "zh" : "en")}>
-            {language === "en" ? "中文" : "English"}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowTips(!showTips)} className="relative">
+              <Keyboard className="w-4 h-4" />
+              {showTips && (
+                <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-[200px] z-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-sm">Keyboard Shortcuts</h4>
+                    <button onClick={() => setShowTips(false)} className="text-gray-400 hover:text-gray-600">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-2 text-xs text-gray-600">
+                    <div><kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Enter</kbd> Generate</div>
+                    <div><kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+Shift+P</kbd> Toggle Preview</div>
+                    <div><kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+C</kbd> Copy Code</div>
+                    <div><kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd> Close Preview</div>
+                  </div>
+                </div>
+              )}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setLanguage(language === "en" ? "zh" : "en")}>
+              {language === "en" ? "中文" : "English"}
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="container py-12">
-        <div className="mx-auto max-w-6xl">
+      <main className="py-12">
+        <div className="w-full">
           <div className="mb-8 text-center">
-            <h1 className="mb-3 text-4xl font-bold tracking-tight md:text-5xl">{t.title}</h1>
             <p className="text-lg text-muted-foreground">{t.subtitle}</p>
             <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-4 py-2 text-sm text-accent">
               <Sparkles className="h-4 w-4" />
@@ -165,15 +249,75 @@ export default function GeneratePage() {
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Input Section */}
-            <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-card p-4 shadow-lg">
+          <div className="grid gap-6 lg:grid-cols-3">
+            {/* Left Column - Conversation History and Input */}
+            <div className="lg:col-span-1 space-y-4">
+              {/* Conversation History */}
+                <div className="rounded-xl border border-border bg-card p-4 shadow-lg h-[33vh]">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Sparkles className="h-5 w-5" />
+                    {language === "en" ? "Conversation History" : "对话记录"}
+                  </h3>
+                  {messages.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMessages([])}
+                      className="text-xs"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      {language === "en" ? "Clear" : "清除"}
+                    </Button>
+                  )}
+                </div>
+                  <div className="space-y-4 h-[calc(33vh-80px)] overflow-y-auto">
+                  {messages.length > 0 ? (
+                    <>
+                      {messages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                              message.role === 'user'
+                                ? 'bg-accent text-accent-foreground'
+                                : 'bg-secondary text-secondary-foreground'
+                            }`}
+                          >
+                            <p className="text-sm">{message.content}</p>
+                            <p className="text-xs opacity-70 mt-1">
+                              {message.timestamp.toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      <div className="text-center">
+                        <Sparkles className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                        <p className="text-sm">
+                          {language === "en" ? "No conversations yet" : "暂无对话记录"}
+                        </p>
+                        <p className="text-xs mt-1 opacity-70">
+                          {language === "en" ? "Start by describing your UI idea below" : "在下方描述您的界面想法开始"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Input Section */}
+              <div className="rounded-xl border border-border bg-card p-4 shadow-lg h-[33vh] flex flex-col">
                 <Textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={t.placeholder}
-                  className="min-h-[200px] resize-none border-0 bg-transparent text-base focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="flex-1 resize-none border-0 bg-transparent text-base focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
                 <div className="mt-4 flex justify-end">
                   <Button
@@ -199,21 +343,57 @@ export default function GeneratePage() {
 
               {isGenerating && (
                 <div className="rounded-xl border border-border bg-card p-6">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 flex-1 rounded-full bg-secondary overflow-hidden">
-                        <div className="h-full w-1/3 rounded-full bg-accent animate-pulse" />
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-lg">Generating your app...</h3>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                        <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                       </div>
-                      <span className="text-sm text-muted-foreground">33%</span>
                     </div>
-                    <p className="text-sm text-muted-foreground">Analyzing your requirements...</p>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-3 flex-1 rounded-full bg-secondary overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-accent to-accent/80 rounded-full animate-pulse" style={{ width: '65%' }} />
+                        </div>
+                        <span className="text-sm font-medium text-accent">65%</span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="space-y-1">
+                          <div className="w-full bg-accent/20 rounded-full h-1">
+                            <div className="bg-accent h-1 rounded-full w-full"></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">Analyzing</p>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="w-full bg-accent/20 rounded-full h-1">
+                            <div className="bg-accent h-1 rounded-full w-3/4"></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">Generating</p>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="w-full bg-accent/20 rounded-full h-1">
+                            <div className="bg-accent h-1 rounded-full w-1/2"></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">Optimizing</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Sparkles className="w-4 h-4 animate-spin" />
+                        <span>Creating components and styling...</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Output Section */}
-            <div className="space-y-4">
+            {/* Output Section - 只保留这一个 */}
+            <div className="space-y-4 lg:col-span-2">
               {generatedProject ? (
                 <>
                   <div className="flex items-center justify-between">
@@ -231,7 +411,7 @@ export default function GeneratePage() {
                         className="gap-2 bg-green-600 hover:bg-green-700 text-white border-green-600"
                       >
                         <Eye className="h-4 w-4" />
-                        Live Preview
+                        {language === "en" ? "Live Preview" : "实时预览"}
                       </Button>
                       <Button
                         variant="outline"
@@ -264,9 +444,9 @@ export default function GeneratePage() {
                           </>
                         )}
                       </Button>
-                      <Button 
-                        size="sm" 
-                        onClick={handleDownload} 
+                      <Button
+                        size="sm"
+                        onClick={handleDownload}
                         className="gap-2 bg-accent hover:bg-accent/90"
                       >
                         <Download className="h-4 w-4" />
@@ -306,57 +486,64 @@ export default function GeneratePage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="p-6">
-                        <div className="bg-secondary/50 rounded-lg p-4 mb-4">
-                          <p className="text-sm text-muted-foreground mb-2">
-                            <strong>Project Information:</strong>
-                          </p>
-                          <div className="text-sm text-muted-foreground space-y-1">
-                            <div><strong>Project Name:</strong> {generatedProject.projectName}</div>
-                            <div><strong>Files Generated:</strong> {Object.keys(generatedProject.files).length}</div>
-                            <div><strong>Template Type:</strong> {generatedProject.files['src/App.tsx']?.includes('useState') ? 'Interactive' : 'Static'}</div>
+                      <div className="h-full flex flex-col">
+                        {previewUrl ? (
+                          <div className="flex-1 bg-white rounded-lg overflow-hidden border border-gray-200">
+                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                <span className="text-sm text-gray-600 ml-2">Live Preview</span>
+                              </div>
+                              <button
+                                onClick={() => setPreviewUrl("")}
+                                className="text-gray-400 hover:text-gray-600 text-sm"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <iframe
+                              src={previewUrl}
+                              className="w-full h-[66vh] border-0"
+                              title="Live Preview"
+                              sandbox="allow-scripts allow-same-origin"
+                            />
                           </div>
-                        </div>
-                        
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                          <p className="text-sm text-green-800 mb-2">
-                            <strong>✅ New Features Available:</strong>
-                          </p>
-                          <ul className="text-sm text-green-700 space-y-1 list-disc list-inside">
-                            <li>Click <strong>"Live Preview"</strong> to see your app running instantly</li>
-                            <li>Click <strong>"Download ZIP"</strong> to get all files in a proper project structure</li>
-                            <li>Extract the ZIP and run <code className="bg-green-100 px-1 py-0.5 rounded">npm install && npm run dev</code></li>
-                          </ul>
-                        </div>
-                        
-                        <div className="rounded-lg border-2 border-dashed border-border p-8 text-center">
-                          <Sparkles className="mx-auto mb-4 h-12 w-12 text-accent" />
-                          <p className="text-muted-foreground mb-4">
-                            {language === "en" 
-                              ? "Your project is ready! Use the buttons above to preview or download."
-                              : "您的项目已准备就绪！使用上方按钮预览或下载。"}
-                          </p>
-                          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                        ) : (
+                          <div className="flex-1 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center p-8">
+                            <div className="bg-secondary/50 rounded-lg p-4 mb-4 max-w-md">
+                              <p className="text-sm text-muted-foreground mb-2">
+                                <strong>Project Information:</strong>
+                              </p>
+                              <div className="text-sm text-muted-foreground space-y-1">
+                                <div><strong>Project Name:</strong> {generatedProject.projectName}</div>
+                                <div><strong>Files Generated:</strong> {Object.keys(generatedProject.files).length}</div>
+                                <div><strong>Template Type:</strong> {generatedProject.files['src/App.tsx']?.includes('useState') ? 'Interactive' : 'Static'}</div>
+                              </div>
+                            </div>
+
+                            <Sparkles className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                            <p className="text-gray-600 text-center mb-6 max-w-md">
+                              {language === "en"
+                                ? "Click 'Live Preview' to see your app running instantly in the browser!"
+                                : "点击'实时预览'按钮，在浏览器中即时查看您的应用运行效果！"}
+                            </p>
                             <button
                               onClick={handlePreview}
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
                             >
-                              🚀 Open Live Preview
-                            </button>
-                            <button
-                              onClick={handleDownload}
-                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                            >
-                              📦 Download ZIP
+                              <Eye className="w-4 h-4" />
+                              {language === "en" ? "Live Preview" : "实时预览"}
                             </button>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </>
               ) : (
-                <div className="flex h-[400px] items-center justify-center rounded-xl border border-dashed border-border bg-card/50">
+                <div className="flex h-[66vh] items-center justify-center rounded-xl border border-dashed border-border bg-card/50">
                   <div className="text-center">
                     <Sparkles className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
                     <p className="text-muted-foreground">

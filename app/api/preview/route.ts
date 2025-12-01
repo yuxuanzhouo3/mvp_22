@@ -1,10 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateFrontendCode } from '@/lib/code-generator'
+import OpenAI from 'openai'
+
+async function callDeepSeekAPI(prompt: string) {
+  const apiKey = process.env.DEEPSEEK_API_KEY
+  const baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'
+  const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
+
+  if (!apiKey) {
+    throw new Error('DEEPSEEK_API_KEY is not configured')
+  }
+
+  const client = new OpenAI({
+    apiKey: apiKey,
+    baseURL: baseUrl,
+  })
+
+  const completion = await client.chat.completions.create({
+    model: model,
+    messages: [
+      {
+        role: 'system',
+        content: `You are a professional frontend developer. Generate a complete React component based on user requirements. Return ONLY the React component code without any imports or exports. Use modern React hooks and functional components. Include inline styles or Tailwind classes. Make it visually appealing and responsive.`
+      },
+      {
+        role: 'user',
+        content: prompt.trim()
+      }
+    ],
+    max_tokens: parseInt(process.env.DEEPSEEK_MAX_TOKENS || '2000'),
+    temperature: parseFloat(process.env.DEEPSEEK_TEMPERATURE || '0.7'),
+  })
+
+  const content = completion.choices[0]?.message?.content
+  if (!content) {
+    throw new Error('Empty response from DeepSeek API')
+  }
+
+  return content
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { prompt } = await request.json()
-    
+
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
       return NextResponse.json(
         { error: 'Prompt is required' },
@@ -12,13 +50,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const generatedProject = generateFrontendCode(prompt.trim())
-    
-    // Return the main App.tsx content for preview
-    const appContent = generatedProject.files['src/App.tsx']
-    const indexContent = generatedProject.files['index.html']
-    
-    if (!appContent) {
+    const appContent = await callDeepSeekAPI(prompt.trim())
+
+    // Check if we got valid content
+    if (!appContent || appContent.trim().length === 0) {
       return NextResponse.json(
         { error: 'Could not generate preview' },
         { status: 500 }

@@ -24,6 +24,44 @@ mornFront is an AI-powered frontend code generator that transforms your ideas in
 - **Domain**: mornhub.dev
 - **Type**: Frontend Application
 
+## DeepSeek AI Configuration
+
+This project now uses DeepSeek AI for code generation. To configure it:
+
+### 1. Get DeepSeek API Key
+1. Visit [DeepSeek Platform](https://platform.deepseek.com/)
+2. Sign up for an account
+3. Get your API key from the dashboard
+
+### 2. Configure Environment Variables
+Create a `.env.local` file in the project root and add:
+
+```env
+# DeepSeek AI Configuration
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+
+# Optional: Model configuration
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MAX_TOKENS=4000
+DEEPSEEK_TEMPERATURE=0.7
+```
+
+### 3. Restart the Application
+After configuring the environment variables, restart your development server:
+
+```bash
+npm run dev
+```
+
+### API Endpoints Updated
+- `/api/generate` - Main code generation using DeepSeek AI (via OpenAI SDK)
+- `/api/preview` - Live preview generation
+- `/api/preview-simple` - Simple preview generation
+- `/api/preview-debug` - Debug preview generation
+
+All endpoints now use DeepSeek AI with OpenAI SDK instead of local template generation.
+
 ## Getting Started
 
 ### Prerequisites

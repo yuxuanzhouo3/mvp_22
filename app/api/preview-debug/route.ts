@@ -1,10 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateFrontendCode } from '@/lib/code-generator'
+import OpenAI from 'openai'
+
+async function callDeepSeekAPI(prompt: string) {
+  const apiKey = process.env.DEEPSEEK_API_KEY
+  const baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'
+  const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
+
+  if (!apiKey) {
+    throw new Error('DEEPSEEK_API_KEY is not configured')
+  }
+
+  const client = new OpenAI({
+    apiKey: apiKey,
+    baseURL: baseUrl,
+  })
+
+  const completion = await client.chat.completions.create({
+    model: model,
+    messages: [
+      {
+        role: 'system',
+        content: `You are a professional frontend developer. Generate a complete React component based on user requirements. Return ONLY the React component code without any imports or exports. Use modern React hooks and functional components. Include inline styles or Tailwind classes. Make it visually appealing and responsive.`
+      },
+      {
+        role: 'user',
+        content: prompt.trim()
+      }
+    ],
+    max_tokens: parseInt(process.env.DEEPSEEK_MAX_TOKENS || '2000'),
+    temperature: parseFloat(process.env.DEEPSEEK_TEMPERATURE || '0.7'),
+  })
+
+  const content = completion.choices[0]?.message?.content
+  if (!content) {
+    throw new Error('Empty response from DeepSeek API')
+  }
+
+  return content
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { prompt } = await request.json()
-    
+
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
       return NextResponse.json(
         { error: 'Prompt is required' },
@@ -12,10 +50,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const generatedProject = generateFrontendCode(prompt.trim())
-    const appContent = generatedProject.files['src/App.tsx']
-    
-    if (!appContent) {
+    const appContent = await callDeepSeekAPI(prompt.trim())
+
+    if (!appContent || appContent.trim().length === 0) {
       return NextResponse.json(
         { error: 'Could not generate preview' },
         { status: 500 }
@@ -29,7 +66,7 @@ export async function POST(request: NextRequest) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${generatedProject.projectName} - Preview</title>
+    <title>Generated App - Preview</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -214,7 +251,7 @@ export async function POST(request: NextRequest) {
               React.createElement('h1', {
                 key: 'title',
                 className: 'text-4xl font-bold mb-4'
-              }, '🎮 ${generatedProject.projectName}'),
+              }, '🎮 Generated App'),
               React.createElement('p', {
                 key: 'subtitle',
                 className: 'text-xl opacity-80'
