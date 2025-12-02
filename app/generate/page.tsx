@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Sparkles, Copy, Download, ArrowLeft, Check, Eye, Code2, Keyboard, X } from "lucide-react"
 import Link from "next/link"
 import { downloadAsProperZip } from "@/lib/download-helper"
+import { ProtectedRoute } from "@/components/protected-route"
 import type { GeneratedProject } from "@/lib/code-generator"
 
 interface Message {
@@ -55,16 +56,24 @@ const translations = {
 }
 
 export default function GeneratePage() {
+  return (
+    <ProtectedRoute>
+      <GeneratePageContent />
+    </ProtectedRoute>
+  )
+}
+
+function GeneratePageContent() {
   const [language, setLanguage] = useState<"en" | "zh">("en")
   const [prompt, setPrompt] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedProject, setGeneratedProject] = useState<GeneratedProject | null>(null)
   const [copied, setCopied] = useState(false)
-  const [viewMode, setViewMode] = useState<"code" | "preview">("code")
   const [selectedFile, setSelectedFile] = useState<string>("src/App.tsx")
   const [previewUrl, setPreviewUrl] = useState<string>("")
   const [showTips, setShowTips] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
+  const [previewPrompt, setPreviewPrompt] = useState<string>("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const t = translations[language]
@@ -83,14 +92,8 @@ export default function GeneratePage() {
         handleGenerate()
       }
       // Ctrl/Cmd + Shift + P to toggle preview
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
-        e.preventDefault()
-        if (generatedProject) {
-          setViewMode(viewMode === "code" ? "preview" : "code")
-        }
-      }
-      // Ctrl/Cmd + C to copy when code view is active
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && viewMode === "code" && generatedProject) {
+      // Ctrl/Cmd + C to copy when viewing code
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && generatedProject && !previewUrl) {
         e.preventDefault()
         handleCopy()
       }
@@ -102,7 +105,7 @@ export default function GeneratePage() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isGenerating, viewMode, generatedProject, previewUrl])
+  }, [isGenerating, generatedProject, previewUrl])
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
@@ -133,7 +136,7 @@ export default function GeneratePage() {
       const data = await response.json()
       setGeneratedProject(data.project)
       setSelectedFile('src/App.tsx')
-      setViewMode('code')
+      setPreviewPrompt(prompt.trim()) // Save prompt for preview
 
       // Add AI response to conversation history
       const aiMessage: Message = {
@@ -169,7 +172,9 @@ export default function GeneratePage() {
   }
 
   const handlePreview = async () => {
-    if (!prompt.trim()) return
+    if (!generatedProject) return
+    const promptToUse = previewPrompt || prompt.trim()
+    if (!promptToUse) return
 
     try {
       const response = await fetch('/api/preview-simple', {
@@ -177,7 +182,7 @@ export default function GeneratePage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt: prompt.trim() }),
+        body: JSON.stringify({ prompt: promptToUse }),
       })
 
       if (response.ok) {
@@ -188,7 +193,6 @@ export default function GeneratePage() {
         const blob = new Blob([previewHtml], { type: 'text/html' })
         const url = URL.createObjectURL(blob)
         setPreviewUrl(url)
-        setViewMode('preview')
 
         console.log('Preview created successfully')
       } else {
@@ -416,20 +420,12 @@ export default function GeneratePage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setViewMode(viewMode === "code" ? "preview" : "code")}
+                        onClick={() => setPreviewUrl("")}
+                        disabled={!previewUrl}
                         className="gap-2"
                       >
-                        {viewMode === "code" ? (
-                          <>
-                            <Code2 className="h-4 w-4" />
-                            {t.viewCode}
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="h-4 w-4" />
-                            {t.viewPreview}
-                          </>
-                        )}
+                        <Code2 className="h-4 w-4" />
+                        {language === "en" ? "View Code" : "查看代码"}
                       </Button>
                       <Button variant="outline" size="sm" onClick={handleCopy} className="gap-2">
                         {copied ? (
@@ -456,7 +452,32 @@ export default function GeneratePage() {
                   </div>
 
                   <div className="rounded-xl border border-border bg-card overflow-hidden h-[66vh]">
-                    {viewMode === "code" ? (
+                    {previewUrl ? (
+                      <div className="h-full flex flex-col">
+                        <div className="flex-1 bg-white rounded-lg overflow-hidden border border-gray-200">
+                          <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                              <span className="text-sm text-gray-600 ml-2">Live Preview</span>
+                            </div>
+                            <button
+                              onClick={() => setPreviewUrl("")}
+                              className="text-gray-400 hover:text-gray-600 text-sm"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <iframe
+                            src={previewUrl}
+                            className="w-full flex-1 border-0"
+                            title="Live Preview"
+                            sandbox="allow-scripts allow-same-origin"
+                          />
+                        </div>
+                      </div>
+                    ) : (
                       <div className="grid grid-cols-[200px_1fr] h-full">
                         {/* File Browser */}
                         <div className="border-r border-border bg-secondary/20 p-2 overflow-y-auto">
@@ -485,60 +506,6 @@ export default function GeneratePage() {
                           </pre>
                         </div>
                       </div>
-                    ) : (
-                      <div className="h-full flex flex-col">
-                        {previewUrl ? (
-                          <div className="flex-1 bg-white rounded-lg overflow-hidden border border-gray-200">
-                            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                <span className="text-sm text-gray-600 ml-2">Live Preview</span>
-                              </div>
-                              <button
-                                onClick={() => setPreviewUrl("")}
-                                className="text-gray-400 hover:text-gray-600 text-sm"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                            <iframe
-                              src={previewUrl}
-                              className="w-full h-[66vh] border-0"
-                              title="Live Preview"
-                              sandbox="allow-scripts allow-same-origin"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex-1 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center p-8">
-                            <div className="bg-secondary/50 rounded-lg p-4 mb-4 max-w-md">
-                              <p className="text-sm text-muted-foreground mb-2">
-                                <strong>Project Information:</strong>
-                              </p>
-                              <div className="text-sm text-muted-foreground space-y-1">
-                                <div><strong>Project Name:</strong> {generatedProject.projectName}</div>
-                                <div><strong>Files Generated:</strong> {Object.keys(generatedProject.files).length}</div>
-                                <div><strong>Template Type:</strong> {generatedProject.files['src/App.tsx']?.includes('useState') ? 'Interactive' : 'Static'}</div>
-                              </div>
-                            </div>
-
-                            <Sparkles className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                            <p className="text-gray-600 text-center mb-6 max-w-md">
-                              {language === "en"
-                                ? "Click 'Live Preview' to see your app running instantly in the browser!"
-                                : "点击'实时预览'按钮，在浏览器中即时查看您的应用运行效果！"}
-                            </p>
-                            <button
-                              onClick={handlePreview}
-                              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
-                            >
-                              <Eye className="w-4 h-4" />
-                              {language === "en" ? "Live Preview" : "实时预览"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
                     )}
                   </div>
                 </>
@@ -558,4 +525,5 @@ export default function GeneratePage() {
       </main>
     </div>
   )
+}
 }

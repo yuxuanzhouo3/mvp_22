@@ -89,3 +89,4 @@ CREATE POLICY "Authenticated users can create comments" ON public.comments
 CREATE POLICY "Authors can update their own comments" ON public.comments
   FOR UPDATE USING (auth.uid() = author_id);
 
+

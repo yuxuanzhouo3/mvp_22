@@ -105,3 +105,4 @@ export const uploadAvatar = async (file: File) => {
   return { data: publicUrl, error: null }
 }
 
+

@@ -60,7 +60,7 @@ Make sure the generated code is immediately runnable and includes all necessary 
           content: prompt.trim()
         }
       ],
-      max_tokens: parseInt(process.env.DEEPSEEK_MAX_TOKENS || '4000'),
+      max_tokens: parseInt(process.env.DEEPSEEK_MAX_TOKENS || '8000'),
       temperature: parseFloat(process.env.DEEPSEEK_TEMPERATURE || '0.7'),
     })
 
@@ -75,8 +75,19 @@ Make sure the generated code is immediately runnable and includes all necessary 
     }
 
     try {
+      // Try to extract JSON from markdown code blocks first
+      let jsonContent = generatedContent
+
+      // Check if response contains markdown code blocks
+      const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/
+      const match = generatedContent.match(codeBlockRegex)
+      if (match) {
+        jsonContent = match[1].trim()
+        console.log('Extracted JSON from code block')
+      }
+
       // Try to parse the response as JSON
-      const parsedResponse = JSON.parse(generatedContent)
+      const parsedResponse = JSON.parse(jsonContent)
       return NextResponse.json({
         success: true,
         project: parsedResponse
@@ -84,6 +95,7 @@ Make sure the generated code is immediately runnable and includes all necessary 
     } catch (parseError) {
       // If JSON parsing fails, create a fallback response
       console.warn('Failed to parse AI response as JSON, using fallback:', parseError)
+      console.warn('Raw response preview:', generatedContent.substring(0, 200) + '...')
       return NextResponse.json({
         success: true,
         project: {
