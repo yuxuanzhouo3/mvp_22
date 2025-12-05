@@ -20,6 +20,14 @@ const translations = {
     generate: "Generate App",
     generating: "Generating...",
     viewExample: "View Example",
+    examples: [
+      "Create a modern todo list with dark mode and categories",
+      "Build a weather dashboard with city search and 5-day forecast",
+      "Design a landing page for a SaaS product with pricing tiers",
+      "Make a responsive e-commerce product card with add to cart",
+      "Create a user profile page with avatar upload and settings",
+      "Build a chat interface with message bubbles and typing indicator"
+    ],
   },
   zh: {
     badge: "AI 驱动的代码生成",
@@ -29,17 +37,32 @@ const translations = {
     generate: "生成应用",
     generating: "生成中...",
     viewExample: "查看示例",
+    examples: [
+      "创建一个带深色模式和分类的现代待办事项列表",
+      "构建一个带城市搜索和 5 天预报的天气仪表板",
+      "为 SaaS 产品设计一个带定价层级的落地页",
+      "制作一个响应式的电商产品卡片带添加到购物车功能",
+      "创建一个带头像上传和设置的用户资料页面",
+      "构建一个带消息气泡和打字指示器的聊天界面"
+    ],
   },
 }
 
 export function HeroSection({ language }: HeroSectionProps) {
   const t = translations[language]
   const [prompt, setPrompt] = useState("")
+  const [currentExampleIndex, setCurrentExampleIndex] = useState(0)
   const router = useRouter()
 
   const handleGenerate = () => {
     if (!prompt.trim()) return
     router.push("/generate")
+  }
+
+  const handleViewExample = () => {
+    const example = t.examples[currentExampleIndex]
+    setPrompt(example)
+    setCurrentExampleIndex((prev) => (prev + 1) % t.examples.length)
   }
 
   return (
@@ -63,27 +86,47 @@ export function HeroSection({ language }: HeroSectionProps) {
           </p>
 
           <div className="mx-auto max-w-3xl">
-            <div className="relative rounded-xl border border-border bg-card p-2 shadow-2xl">
+            <div className="relative rounded-xl border border-border bg-card p-2 shadow-2xl overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-accent/5 via-transparent to-accent/5 opacity-50" />
               <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder={t.placeholder}
-                className="min-h-[120px] resize-none border-0 bg-transparent text-base focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="min-h-[120px] resize-none border-0 bg-transparent text-base focus-visible:ring-0 focus-visible:ring-offset-0 relative z-10 placeholder:text-muted-foreground/70"
               />
-              <div className="flex items-center justify-between pt-2">
-                <Button variant="ghost" size="sm" className="text-muted-foreground">
-                  {t.viewExample}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+              <div className="flex items-center justify-between pt-2 relative z-10">
                 <Button
-                  onClick={handleGenerate}
-                  disabled={!prompt.trim()}
-                  size="lg"
-                  className="bg-accent hover:bg-accent/90"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
+                  onClick={handleViewExample}
                 >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {t.generate}
+                  {t.viewExample}
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform hover:translate-x-1" />
                 </Button>
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    {t.examples.map((_, index) => (
+                      <div
+                        key={index}
+                        className={`w-2 h-2 rounded-full transition-colors ${
+                          index === currentExampleIndex
+                            ? 'bg-accent'
+                            : 'bg-muted-foreground/30'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={!prompt.trim()}
+                    size="lg"
+                    className="bg-accent hover:bg-accent/90 hover:shadow-lg transition-all duration-200"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {t.generate}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

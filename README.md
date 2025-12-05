@@ -45,6 +45,9 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 DEEPSEEK_MAX_TOKENS=4000
 DEEPSEEK_TEMPERATURE=0.7
+
+# For faster generation (if available):
+# DEEPSEEK_MODEL=deepseek-chat-fast
 ```
 
 ### 3. Restart the Application

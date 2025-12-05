@@ -72,11 +72,47 @@ function GeneratePageContent() {
   const [selectedFile, setSelectedFile] = useState<string>("src/App.tsx")
   const [previewUrl, setPreviewUrl] = useState<string>("")
   const [showTips, setShowTips] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [previewPrompt, setPreviewPrompt] = useState<string>("")
+  const [generationWarning, setGenerationWarning] = useState<string>("")
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const t = translations[language]
+
+  const suggestedPrompts = language === "en" ? [
+    "Create a modern todo list with dark mode toggle",
+    "Build a weather app with city search and forecast",
+    "Design a responsive landing page for a SaaS product",
+    "Make an e-commerce product card with add to cart",
+    "Create a user dashboard with charts and metrics",
+    "Build a contact form with validation",
+    "Design a blog post layout with author info",
+    "Create a photo gallery with lightbox modal",
+    "Build a pricing comparison table",
+    "Make a responsive navigation menu"
+  ] : [
+    "创建一个现代化的待办事项列表，带深色模式切换",
+    "构建一个带城市搜索和天气预报的应用",
+    "设计一个 SaaS 产品的响应式落地页",
+    "制作一个电商产品卡片，带添加到购物车功能",
+    "创建一个用户仪表板，带图表和指标",
+    "构建一个带验证的联系表单",
+    "设计一个博客文章布局，带作者信息",
+    "创建一个带灯箱模态框的图片画廊",
+    "制作一个定价对比表格",
+    "创建一个响应式的导航菜单"
+  ]
+
+  // Load prefilled prompt from localStorage
+  useEffect(() => {
+    const prefillPrompt = localStorage.getItem('prefillPrompt')
+    if (prefillPrompt) {
+      setPrompt(prefillPrompt)
+      localStorage.removeItem('prefillPrompt') // Clear it after use
+    }
+  }, [])
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -109,13 +145,24 @@ function GeneratePageContent() {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
+
+    // Validate prompt length
+    const trimmedPrompt = prompt.trim()
+    if (trimmedPrompt.length > 1000) {
+      alert('Prompt is too long. Please keep it under 1000 characters for faster generation.')
+      return
+    }
+
+    // Create abort controller for cancellation
+    const controller = new AbortController()
+    setAbortController(controller)
     setIsGenerating(true)
 
     // Add user message to conversation history
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: prompt.trim(),
+      content: trimmedPrompt,
       timestamp: new Date()
     }
     setMessages(prev => [...prev, userMessage])
@@ -134,9 +181,19 @@ function GeneratePageContent() {
       }
 
       const data = await response.json()
+
+      // Debug: check received data
+      console.log('Received project data:', data)
+      if (data.project?.files?.['src/App.tsx']) {
+        console.log('App.tsx content preview:', data.project.files['src/App.tsx'].substring(0, 200).replace(/\n/g, '\\n'))
+        console.log('App.tsx contains newlines:', data.project.files['src/App.tsx'].includes('\n'))
+        console.log('App.tsx length:', data.project.files['src/App.tsx'].length)
+      }
+
       setGeneratedProject(data.project)
       setSelectedFile('src/App.tsx')
       setPreviewPrompt(prompt.trim()) // Save prompt for preview
+      setGenerationWarning(data.warning || "") // Set warning message
 
       // Add AI response to conversation history
       const aiMessage: Message = {
@@ -149,11 +206,16 @@ function GeneratePageContent() {
 
       // Clear the input after successful generation
       setPrompt("")
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Generation cancelled by user')
+        return
+      }
       console.error('Error generating code:', error)
       alert('Failed to generate code. Please try again.')
     } finally {
       setIsGenerating(false)
+      setAbortController(null)
     }
   }
 
@@ -297,6 +359,80 @@ function GeneratePageContent() {
                           </div>
                         </div>
                       ))}
+
+                      {/* Progress bar in conversation when generating */}
+                      {isGenerating && (
+                        <div className="flex justify-start">
+                          <div className="max-w-[80%] bg-secondary text-secondary-foreground rounded-lg px-4 py-3">
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-medium">Generating your app...</h4>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                  <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                  <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs text-muted-foreground">
+                                  This may take 30-60 seconds. Please wait...
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (abortController) {
+                                      abortController.abort()
+                                      setAbortController(null)
+                                      setIsGenerating(false)
+                                    }
+                                  }}
+                                  className="text-xs h-6 px-2"
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 flex-1 rounded-full bg-secondary-foreground/20 overflow-hidden">
+                                    <div className="h-full bg-accent rounded-full animate-pulse" style={{ width: '65%' }} />
+                                  </div>
+                                  <span className="text-xs font-medium text-accent">65%</span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                  <div className="space-y-1">
+                                    <div className="w-full bg-accent/20 rounded-full h-0.5">
+                                      <div className="bg-accent h-0.5 rounded-full w-full"></div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">Analyzing</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <div className="w-full bg-accent/20 rounded-full h-0.5">
+                                      <div className="bg-accent h-0.5 rounded-full w-3/4"></div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">Generating</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <div className="w-full bg-accent/20 rounded-full h-0.5">
+                                      <div className="bg-accent h-0.5 rounded-full w-1/2"></div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">Optimizing</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Sparkles className="w-3 h-3 animate-spin" />
+                                  <span>Creating components and styling...</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div ref={messagesEndRef} />
                     </>
                   ) : (
@@ -317,12 +453,43 @@ function GeneratePageContent() {
 
               {/* Input Section */}
               <div className="rounded-xl border border-border bg-card p-4 shadow-lg h-[33vh] flex flex-col">
+                <div className="mb-3 flex justify-between items-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSuggestions(!showSuggestions)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    💡 {language === "en" ? "Suggestions" : "建议提示"}
+                  </Button>
+                  {showSuggestions && (
+                    <div className="absolute top-full left-4 right-4 mt-1 bg-card border border-border rounded-lg shadow-lg p-3 z-50 max-h-48 overflow-y-auto">
+                      <div className="grid gap-2">
+                        {suggestedPrompts.map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setPrompt(suggestion)
+                              setShowSuggestions(false)
+                            }}
+                            className="text-left p-2 rounded hover:bg-secondary text-sm transition-colors"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <Textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={t.placeholder}
                   className="flex-1 resize-none border-0 bg-transparent text-base focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
+                <div className="text-xs text-muted-foreground text-right">
+                  {prompt.length}/1000
+                </div>
                 <div className="mt-4 flex justify-end">
                   <Button
                     onClick={handleGenerate}
@@ -345,61 +512,46 @@ function GeneratePageContent() {
                 </div>
               </div>
 
-              {isGenerating && (
-                <div className="rounded-xl border border-border bg-card p-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-lg">Generating your app...</h3>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-3 flex-1 rounded-full bg-secondary overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-accent to-accent/80 rounded-full animate-pulse" style={{ width: '65%' }} />
-                        </div>
-                        <span className="text-sm font-medium text-accent">65%</span>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4 text-center">
-                        <div className="space-y-1">
-                          <div className="w-full bg-accent/20 rounded-full h-1">
-                            <div className="bg-accent h-1 rounded-full w-full"></div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Analyzing</p>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="w-full bg-accent/20 rounded-full h-1">
-                            <div className="bg-accent h-1 rounded-full w-3/4"></div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Generating</p>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="w-full bg-accent/20 rounded-full h-1">
-                            <div className="bg-accent h-1 rounded-full w-1/2"></div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Optimizing</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Sparkles className="w-4 h-4 animate-spin" />
-                        <span>Creating components and styling...</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Output Section - 只保留这一个 */}
             <div className="space-y-4 lg:col-span-2">
               {generatedProject ? (
                 <>
+                  {/* Warning Banner */}
+                  {generationWarning && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0">
+                          <svg className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-sm font-medium text-amber-800">
+                            {language === "en" ? "Code Generation Warning" : "代码生成警告"}
+                          </h3>
+                          <p className="text-sm text-amber-700 mt-1">
+                            {generationWarning}
+                          </p>
+                          <p className="text-xs text-amber-600 mt-2">
+                            {language === "en"
+                              ? "Tip: Try simplifying your request or regenerate with more specific requirements."
+                              : "提示：尝试简化您的需求描述，或使用更具体的描述重新生成。"}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setGenerationWarning("")}
+                          className="flex-shrink-0 text-amber-400 hover:text-amber-600"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-semibold">{t.generatedCode}</h2>
@@ -525,5 +677,4 @@ function GeneratePageContent() {
       </main>
     </div>
   )
-}
 }

@@ -9,6 +9,8 @@ export async function GET() {
     DEEPSEEK_TEMPERATURE: process.env.DEEPSEEK_TEMPERATURE || '默认值',
     SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅ 已配置' : '❌ 未配置',
     SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ 已配置' : '❌ 未配置',
+    SUPABASE_URL_VALUE: process.env.NEXT_PUBLIC_SUPABASE_URL || '未设置',
+    SUPABASE_ANON_KEY_VALUE: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '已设置（隐藏）' : '未设置',
   }
 
   return NextResponse.json({

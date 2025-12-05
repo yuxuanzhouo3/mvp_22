@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Code2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface ExamplesSectionProps {
   language: "en" | "zh"
@@ -29,6 +30,36 @@ const translations = {
         tags: ["Landing Page", "Responsive", "Modern"],
         preview: "/saas-landing-page.png",
       },
+      {
+        prompt: "Create an e-commerce product card with image carousel and add to cart",
+        tags: ["E-commerce", "Interactive", "Responsive"],
+        preview: "/placeholder.jpg",
+      },
+      {
+        prompt: "Build a user profile page with avatar upload and social links",
+        tags: ["Profile", "Upload", "Social"],
+        preview: "/placeholder-user.jpg",
+      },
+      {
+        prompt: "Make a responsive navigation menu with mobile hamburger menu",
+        tags: ["Navigation", "Mobile", "UX"],
+        preview: "/placeholder.svg",
+      },
+      {
+        prompt: "Create a data visualization dashboard with charts and metrics",
+        tags: ["Dashboard", "Charts", "Analytics"],
+        preview: "/placeholder.jpg",
+      },
+      {
+        prompt: "Build a contact form with validation and success message",
+        tags: ["Form", "Validation", "UX"],
+        preview: "/placeholder.svg",
+      },
+      {
+        prompt: "Design a blog post card with reading time and author info",
+        tags: ["Blog", "Cards", "Content"],
+        preview: "/placeholder.jpg",
+      },
     ],
   },
   zh: {
@@ -51,12 +82,49 @@ const translations = {
         tags: ["落地页", "响应式", "现代"],
         preview: "/saas-landing-page.png",
       },
+      {
+        prompt: "创建一个电商产品卡片，带图片轮播和添加到购物车功能",
+        tags: ["电商", "交互式", "响应式"],
+        preview: "/placeholder.jpg",
+      },
+      {
+        prompt: "构建一个用户资料页面，带头像上传和社交链接",
+        tags: ["资料页", "上传", "社交"],
+        preview: "/placeholder-user.jpg",
+      },
+      {
+        prompt: "制作一个响应式的导航菜单，带移动端汉堡菜单",
+        tags: ["导航", "移动端", "用户体验"],
+        preview: "/placeholder.svg",
+      },
+      {
+        prompt: "创建一个数据可视化仪表板，带图表和指标展示",
+        tags: ["仪表板", "图表", "分析"],
+        preview: "/placeholder.jpg",
+      },
+      {
+        prompt: "构建一个联系表单，带验证和成功消息提示",
+        tags: ["表单", "验证", "用户体验"],
+        preview: "/placeholder.svg",
+      },
+      {
+        prompt: "设计一个博客文章卡片，带阅读时间和作者信息",
+        tags: ["博客", "卡片", "内容"],
+        preview: "/placeholder.jpg",
+      },
     ],
   },
 }
 
 export function ExamplesSection({ language }: ExamplesSectionProps) {
   const t = translations[language]
+  const router = useRouter()
+
+  const handleTryPrompt = (prompt: string) => {
+    // Store the prompt in localStorage to pre-fill the generate page
+    localStorage.setItem('prefillPrompt', prompt)
+    router.push('/generate')
+  }
 
   return (
     <section id="examples" className="py-24 md:py-32 bg-secondary/30">
@@ -66,35 +134,54 @@ export function ExamplesSection({ language }: ExamplesSectionProps) {
           <p className="text-lg text-muted-foreground text-balance">{t.subtitle}</p>
         </div>
 
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
           {t.examples.map((example, index) => (
             <Card
               key={index}
-              className="group overflow-hidden border-border bg-card transition-all hover:border-accent/50 hover:shadow-lg hover:shadow-accent/5"
+              className="group overflow-hidden border-border bg-card transition-all hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10 hover:-translate-y-1 duration-300 cursor-pointer"
+              onClick={() => handleTryPrompt(example.prompt)}
             >
-              <div className="aspect-video overflow-hidden bg-secondary">
+              <div className="aspect-video overflow-hidden bg-gradient-to-br from-secondary to-secondary/50 relative">
                 <img
                   src={example.preview || "/placeholder.svg"}
                   alt={example.prompt}
-                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  className="h-full w-full object-cover transition-all duration-500 group-hover:scale-110 group-hover:brightness-110"
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="absolute top-3 right-3 bg-accent/90 text-accent-foreground px-2 py-1 rounded-full text-xs font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+                  Try it
+                </div>
               </div>
-              <div className="p-6">
-                <div className="mb-4 flex items-start gap-2">
-                  <Code2 className="h-5 w-5 text-accent mt-0.5 flex-shrink-0" />
-                  <p className="text-sm leading-relaxed">{example.prompt}</p>
+              <div className="p-6 flex flex-col h-full">
+                <div className="mb-4 flex items-start gap-3 flex-1">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
+                      <Code2 className="h-4 w-4 text-accent" />
+                    </div>
+                  </div>
+                  <p className="text-sm leading-relaxed text-muted-foreground group-hover:text-foreground transition-colors">
+                    {example.prompt}
+                  </p>
                 </div>
                 <div className="mb-4 flex flex-wrap gap-2">
                   {example.tags.map((tag, tagIndex) => (
                     <span
                       key={tagIndex}
-                      className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent"
+                      className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent hover:bg-accent hover:text-accent-foreground transition-colors"
                     >
                       {tag}
                     </span>
                   ))}
                 </div>
-                <Button variant="ghost" size="sm" className="w-full group/btn">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full group/btn hover:bg-accent hover:text-accent-foreground transition-all duration-200"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleTryPrompt(example.prompt)
+                  }}
+                >
                   {t.tryIt}
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
                 </Button>

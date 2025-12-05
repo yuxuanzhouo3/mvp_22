@@ -90,3 +90,6 @@ CREATE POLICY "Authors can update their own comments" ON public.comments
   FOR UPDATE USING (auth.uid() = author_id);
 
 
+
+
+

@@ -27,3 +27,6 @@ export async function GET(request: NextRequest) {
   // Return the user to an error page with instructions
   return NextResponse.redirect(`${origin}/auth/auth-code-error`)
 }
+
+
+
