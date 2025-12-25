@@ -16,18 +16,23 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Payment create API called')
+
     // 验证用户认证
     const authHeader = request.headers.get("authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log('No auth header or invalid format')
       return NextResponse.json(
-        { success: false, error: "Unauthorized" },
+        { success: false, error: "Unauthorized - No token provided" },
         { status: 401 }
       );
     }
 
     const token = authHeader.substring(7);
+    console.log('Token extracted, verifying user...')
 
     if (!supabase) {
+      console.error('Supabase client not available')
       return NextResponse.json(
         { success: false, error: "Supabase not configured" },
         { status: 500 }
@@ -39,12 +44,23 @@ export async function POST(request: NextRequest) {
       token
     );
 
-    if (userError || !user) {
+    if (userError) {
+      console.error('User verification error:', userError)
       return NextResponse.json(
-        { success: false, error: "Invalid session" },
+        { success: false, error: "Invalid session", details: userError.message },
         { status: 401 }
       );
     }
+
+    if (!user) {
+      console.log('No user found for token')
+      return NextResponse.json(
+        { success: false, error: "Invalid session - No user" },
+        { status: 401 }
+      );
+    }
+
+    console.log('User authenticated successfully:', user.id)
 
     const body = await request.json();
     const { method, billingCycle } = body as {

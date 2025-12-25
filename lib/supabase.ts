@@ -30,12 +30,21 @@ function getSupabaseConfig() {
 }
 
 // 延迟创建客户端的函数
-function createSupabaseClient() {
+function initializeSupabaseClient() {
   if (supabaseClient) return supabaseClient
 
   const config = getSupabaseConfig()
+  console.log('Initializing Supabase client with config:', {
+    hasUrl: !!config.url,
+    hasKey: !!config.anonKey,
+    url: config.url ? config.url.substring(0, 30) + '...' : 'none'
+  })
+
   if (config.url && config.anonKey) {
     supabaseClient = createClient(config.url, config.anonKey)
+    console.log('Supabase client created successfully')
+  } else {
+    console.error('Failed to create Supabase client: missing URL or key')
   }
 
   return supabaseClient
@@ -52,7 +61,7 @@ export const supabase = typeof window === 'undefined'
       // 客户端：返回代理对象，在首次访问时创建
       return new Proxy({} as any, {
         get(target, prop) {
-          const client = createSupabaseClient()
+          const client = initializeSupabaseClient()
           if (!client) {
             console.warn('Supabase client not available - environment variables may not be initialized')
             return () => Promise.reject(new Error('Supabase client not initialized'))

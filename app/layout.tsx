@@ -5,6 +5,8 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import { ThemeProvider } from '@/components/theme-provider'
 import { EnvInitializer } from '@/components/env-initializer'
+import { AuthDebug } from '@/components/auth-debug'
+import { VercelDiagnostic } from '@/components/vercel-diagnostic'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -39,6 +41,8 @@ export default function RootLayout({
           <AuthProvider>
             {children}
             <Analytics />
+            <AuthDebug />
+            <VercelDiagnostic />
           </AuthProvider>
         </ThemeProvider>
       </body>

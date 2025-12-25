@@ -41,20 +41,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let subscription: { unsubscribe: () => void } | null = null
 
     async function initializeAuth() {
+      console.log('Initializing authentication...')
+
+      // 等待环境变量初始化
+      try {
+        await new Promise(resolve => setTimeout(resolve, 100)) // 给环境变量初始化一点时间
+      } catch (error) {
+        console.warn('Environment initialization delay failed:', error)
+      }
+
       // 如果服务器端已经有 supabase client，直接使用
       if (supabase) {
+        console.log('Using server-side Supabase client')
         await setupAuth(supabase)
         return
       }
 
       // 客户端：尝试从 API 获取环境变量并创建 client
       try {
+        console.log('Creating client-side Supabase client...')
         const client = await createSupabaseClient()
+        console.log('Supabase client created:', !!client)
+
         if (mounted) {
           setSupabaseClient(client)
           if (client) {
             await setupAuth(client)
           } else {
+            console.warn('Failed to create Supabase client, using mock auth')
             // 如果无法创建 client，使用 mock
             setupMockAuth()
           }
@@ -70,31 +84,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function setupAuth(client: SupabaseClient) {
       if (!mounted) return
 
-      // Get initial session
-      const { data: { session }, error } = await client.auth.getSession()
-      if (error) {
-        console.error('Error getting session:', error)
-      } else {
+      try {
+        console.log('Setting up authentication...')
+
+        // Get initial session
+        const { data: { session }, error } = await client.auth.getSession()
+        if (error) {
+          console.error('Error getting session:', error)
+          if (mounted) {
+            setSession(null)
+            setUser(null)
+            setLoading(false)
+          }
+          return
+        }
+
+        console.log('Initial session:', session ? 'found' : 'none')
         if (mounted) {
           setSession(session)
           setUser(session?.user ?? null)
         }
-      }
 
-      // Listen for auth changes
-      const { data: { subscription: authSubscription } } = client.auth.onAuthStateChange(
-        async (event, session) => {
-          if (!mounted) return
-          console.log('Auth state changed:', event, session?.user?.email)
-          setSession(session)
-          setUser(session?.user ?? null)
+        // Listen for auth changes
+        const { data: { subscription: authSubscription } } = client.auth.onAuthStateChange(
+          async (event, session) => {
+            if (!mounted) return
+            console.log('Auth state changed:', event, session?.user?.email || 'no user', session ? 'valid session' : 'no session')
+            setSession(session)
+            setUser(session?.user ?? null)
+            setLoading(false)
+          }
+        )
+
+        subscription = authSubscription
+        if (mounted) {
           setLoading(false)
         }
-      )
 
-      subscription = authSubscription
-      if (mounted) {
-        setLoading(false)
+        console.log('Authentication setup completed')
+      } catch (error) {
+        console.error('Failed to setup authentication:', error)
+        if (mounted) {
+          setSession(null)
+          setUser(null)
+          setLoading(false)
+        }
       }
     }
 

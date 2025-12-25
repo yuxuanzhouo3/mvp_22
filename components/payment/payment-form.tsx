@@ -89,6 +89,13 @@ export function PaymentForm({
       return;
     }
 
+    // 检查用户是否已认证
+    if (!session || !session.access_token) {
+      console.error('Payment failed: Invalid session')
+      onError('Payment error: Invalid session')
+      return;
+    }
+
     const idempotencyKey = `${userId}-${planId}-${billingCycle}-${amount}-${Date.now()}`;
 
     if (paymentRequestRef.current === idempotencyKey) {
@@ -99,14 +106,12 @@ export function PaymentForm({
     setIsProcessing(true);
 
     try {
-      const token = session?.access_token;
+      const token = session.access_token;
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
       };
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
 
       const response = await fetch("/api/payment/onetime/create", {
         method: "POST",
