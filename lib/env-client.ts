@@ -19,14 +19,18 @@ let envPromise: Promise<PublicEnv> | null = null
 async function fetchEnvFromAPI(): Promise<PublicEnv> {
   try {
     const response = await fetch('/api/env', {
-      cache: 'force-cache', // 使用浏览器缓存
+      cache: 'no-cache', // 禁用缓存，确保每次都获取最新值
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch env: ${response.statusText}`)
+      throw new Error(`Failed to fetch env: ${response.status} ${response.statusText}`)
     }
 
     const env = await response.json()
+    console.log('Successfully fetched environment variables from API')
     return env as PublicEnv
   } catch (error) {
     console.error('Failed to fetch environment variables from API:', error)
@@ -40,7 +44,8 @@ async function fetchEnvFromAPI(): Promise<PublicEnv> {
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || '',
       }
     }
-    // 客户端回退
+    // 客户端回退 - 在生产环境中返回空值
+    console.warn('Using fallback empty environment variables')
     return {
       NEXT_PUBLIC_SUPABASE_URL: '',
       NEXT_PUBLIC_SUPABASE_ANON_KEY: '',

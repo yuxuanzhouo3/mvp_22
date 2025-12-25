@@ -9,12 +9,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // 启用 standalone 输出模式，用于 Docker 部署
-  output: 'standalone',
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  },
+  // 移除 standalone 输出模式，Vercel 使用 serverless 模式
+  // output: 'standalone', // 注释掉或移除这一行
 }
 
 export default nextConfig
