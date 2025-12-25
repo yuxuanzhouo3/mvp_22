@@ -1,8 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getPublicEnvSync, getPublicEnv } from './env-client'
 
-// 服务器端：直接使用 process.env
-// 客户端：优先使用 API 获取的环境变量
+// 延迟初始化 Supabase 客户端，避免在模块加载时就访问环境变量
+let supabaseClient: SupabaseClient | null = null
+
 function getSupabaseConfig() {
   // 服务器端直接使用 process.env
   if (typeof window === 'undefined') {
@@ -11,21 +12,55 @@ function getSupabaseConfig() {
       anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
     }
   }
-  
-  // 客户端使用同步方法（需要先调用 getPublicEnv 初始化）
-  const env = getPublicEnvSync()
-  return {
-    url: env.NEXT_PUBLIC_SUPABASE_URL,
-    anonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+
+  // 客户端：优先使用已初始化的环境变量
+  try {
+    const env = getPublicEnvSync()
+    return {
+      url: env.NEXT_PUBLIC_SUPABASE_URL,
+      anonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    }
+  } catch (error) {
+    console.warn('Supabase config: Environment variables not initialized yet')
+    return {
+      url: '',
+      anonKey: '',
+    }
   }
 }
 
-const config = getSupabaseConfig()
+// 延迟创建客户端的函数
+function createSupabaseClient() {
+  if (supabaseClient) return supabaseClient
 
-// Only create Supabase client if both URL and key are available
-export const supabase = config.url && config.anonKey
-  ? createClient(config.url, config.anonKey)
-  : null
+  const config = getSupabaseConfig()
+  if (config.url && config.anonKey) {
+    supabaseClient = createClient(config.url, config.anonKey)
+  }
+
+  return supabaseClient
+}
+
+// 导出延迟初始化的客户端
+export const supabase = typeof window === 'undefined'
+  ? (() => {
+      // 服务器端：立即创建
+      const config = getSupabaseConfig()
+      return config.url && config.anonKey ? createClient(config.url, config.anonKey) : null
+    })()
+  : (() => {
+      // 客户端：返回代理对象，在首次访问时创建
+      return new Proxy({} as any, {
+        get(target, prop) {
+          const client = createSupabaseClient()
+          if (!client) {
+            console.warn('Supabase client not available - environment variables may not be initialized')
+            return () => Promise.reject(new Error('Supabase client not initialized'))
+          }
+          return (client as any)[prop]
+        }
+      })
+    })()
 
 /**
  * 异步创建 Supabase 客户端（客户端使用）
