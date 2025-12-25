@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
 
 export async function GET() {
   try {
@@ -15,10 +15,22 @@ export async function GET() {
       }, { status: 500 })
     }
 
+    // Check if admin client is available
+    const adminAvailable = supabaseAdmin !== null
+
+    // Check environment variables
+    const envCheck = {
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'set' : 'not set',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'set' : 'not set',
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'set' : 'not set',
+    }
+
     return NextResponse.json({
       status: 'success',
       message: 'Supabase connection successful',
       session: data.session ? 'Active session found' : 'No active session',
+      adminClient: adminAvailable ? 'Available' : 'Not available',
+      environment: envCheck,
       timestamp: new Date().toISOString()
     })
   } catch (err: any) {
@@ -27,66 +39,6 @@ export async function GET() {
       message: 'Unexpected error testing Supabase connection',
       error: err.message,
       timestamp: new Date().toISOString()
-    }, { status: 500 })
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const { action, email, password } = await request.json()
-
-    if (action === 'signup') {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      })
-
-      if (error) {
-        return NextResponse.json({
-          status: 'error',
-          message: 'Signup failed',
-          error: error.message
-        }, { status: 400 })
-      }
-
-      return NextResponse.json({
-        status: 'success',
-        message: 'Signup successful',
-        data
-      })
-    }
-
-    if (action === 'signin') {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        return NextResponse.json({
-          status: 'error',
-          message: 'Signin failed',
-          error: error.message
-        }, { status: 400 })
-      }
-
-      return NextResponse.json({
-        status: 'success',
-        message: 'Signin successful',
-        data
-      })
-    }
-
-    return NextResponse.json({
-      status: 'error',
-      message: 'Invalid action'
-    }, { status: 400 })
-
-  } catch (err: any) {
-    return NextResponse.json({
-      status: 'error',
-      message: 'Unexpected error',
-      error: err.message
     }, { status: 500 })
   }
 }

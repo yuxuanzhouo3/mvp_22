@@ -10,6 +10,14 @@ export const metadata: Metadata = {
   title: 'CodeGen AI - Generate Frontend UI with AI',
   description: 'Create production-ready React components instantly with AI',
   generator: 'v0.app',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon.svg', type: 'image/svg+xml', sizes: 'any' },
+    ],
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 }
 
 export default function RootLayout({

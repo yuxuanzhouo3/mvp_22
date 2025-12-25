@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
 function formatCodeString(code: string): string {
@@ -50,8 +50,8 @@ async function generateCodeWithRetry(prompt: string, maxRetries: number = 1) {
   const baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com'
   const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
 
-  if (!apiKey) {
-    throw new Error('DEEPSEEK_API_KEY is not configured')
+  if (!apiKey || apiKey === 'your_deepseek_api_key_here') {
+    throw new Error('DeepSeek API key is not configured. Please set DEEPSEEK_API_KEY in your environment variables. Get your API key from https://platform.deepseek.com/')
   }
 
   // Initialize OpenAI client with DeepSeek configuration
