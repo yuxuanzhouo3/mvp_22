@@ -4,6 +4,7 @@ import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import { ThemeProvider } from '@/components/theme-provider'
+import { EnvInitializer } from '@/components/env-initializer'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
+        <EnvInitializer />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
